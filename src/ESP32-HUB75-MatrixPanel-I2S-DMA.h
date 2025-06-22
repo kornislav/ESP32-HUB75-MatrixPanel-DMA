@@ -666,6 +666,10 @@ public:
    */
   static void color565to888(const uint16_t color, uint8_t &r, uint8_t &g, uint8_t &b);
 
+  static void hueToRGB(uint8_t hue, uint8_t& r, uint8_t& g, uint8_t& b);
+
+  static void calculateGradient(uint8_t& start, uint8_t step, uint8_t& r, uint8_t& g, uint8_t& b);
+
   inline void flipDMABuffer()
   {
     if (!m_cfg.double_buff)
@@ -965,7 +969,7 @@ inline void MatrixPanel_I2S_DMA::color565to888(const uint16_t color, uint8_t &r,
   b |= b >> 5;
 }
 
-inline void hueToRGB(uint8_t hue, uint8_t& r, uint8_t& g, uint8_t& b)
+inline void MatrixPanel_I2S_DMA::hueToRGB(uint8_t hue, uint8_t& r, uint8_t& g, uint8_t& b)
 {
   uint8_t region = hue / 43;
   uint8_t remainder = (hue - (region * 43)) * 6;
@@ -997,7 +1001,7 @@ inline void hueToRGB(uint8_t hue, uint8_t& r, uint8_t& g, uint8_t& b)
   }
 }
 
-inline void calculateGradient(uint8_t& start, uint8_t step, uint8_t& r, uint8_t& g, uint8_t& b)
+inline void MatrixPanel_I2S_DMA::calculateGradient(uint8_t& start, uint8_t step, uint8_t& r, uint8_t& g, uint8_t& b)
 {
   start += step;
   hueToRGB(start, r, g, b);
