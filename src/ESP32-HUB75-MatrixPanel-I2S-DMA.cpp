@@ -984,4 +984,81 @@ void MatrixPanel_I2S_DMA::fillRectDMA(int16_t x, int16_t y, int16_t w, int16_t h
   }
 }
 
+void MatrixPanel_I2S_DMA::MatrixPanel_I2S_DMA::bitmapRow(int16_t x_coord, int16_t y_coord, int16_t length, uint8_t bitmask, bool flip, uint8_t red, uint8_t green, uint8_t blue)
+{
+  if (!initialized)
+    return;
+  
+  if(bitmask == 0)
+    return;
+  
+  if ((x_coord + length) < 1 || y_coord < 0 || x_coord >= PIXELS_PER_ROW || y_coord >= m_cfg.mx_height)
+    return;
+  
+  length = x_coord < 0 ? length + x_coord : length;
+  int16_t start = (8 - length) + (x_coord < 0 ? x_coord : 0);
+  x_coord = x_coord < 0 ? 0 : x_coord;
+  
+  length = ((x_coord + length) >= PIXELS_PER_ROW) ? (PIXELS_PER_ROW - x_coord) : length;
+  
+  /* LED Brightness Compensation */
+  uint16_t red16, green16, blue16;
+#ifndef NO_CIE1931
+  red16 = lumConvTab[red];
+  green16 = lumConvTab[green];
+  blue16 = lumConvTab[blue];
+#else
+  red16 = red << MASK_OFFSET;
+  green16 = green << MASK_OFFSET;
+  blue16 = blue << MASK_OFFSET;
+#endif
+  
+  uint16_t _colourbitclear = BITMASK_RGB1_CLEAR, _colourbitoffset = 0;
+  
+  if (y_coord >= ROWS_PER_FRAME)
+  { // if we are drawing to the bottom part of the panel
+    _colourbitoffset = BITS_RGB2_OFFSET;
+    _colourbitclear = BITMASK_RGB2_CLEAR;
+    y_coord -= ROWS_PER_FRAME;
+  }
+  
+  // Iterating through colour depth bits (8 iterations)
+  uint8_t colour_depth_idx = m_cfg.getPixelColorDepthBits();
+  do
+  {
+    --colour_depth_idx;
+    
+    // let's precalculate RGB1 and RGB2 bits than flood it over the entire DMA buffer
+    uint16_t RGB_output_bits = 0;
+    uint16_t mask = PIXEL_COLOR_MASK_BIT(colour_depth_idx, MASK_OFFSET);
+    
+    /* Per the .h file, the order of the output RGB bits is:
+    * BIT_B2, BIT_G2, BIT_R2,    BIT_B1, BIT_G1, BIT_R1     */
+    RGB_output_bits |= (bool)(blue16 & mask); // --B
+    RGB_output_bits <<= 1;
+    RGB_output_bits |= (bool)(green16 & mask); // -BG
+    RGB_output_bits <<= 1;
+    RGB_output_bits |= (bool)(red16 & mask); // BGR
+    RGB_output_bits <<= _colourbitoffset;    // shift color bits to the required position
+    
+    // Get the contents at this address,
+    // it would represent a vector pointing to the full row of pixels for the specified colour depth bit at Y coordinate
+    ESP32_I2S_DMA_STORAGE_TYPE *p = fb->rowBits[y_coord]->getDataPtr(colour_depth_idx);
+    
+    int16_t _l = length;
+    do
+    { // iterate pixels in a row
+      --_l;
+      bool skip = (bitmask & (1 << (start + (flip ? _l : length - _l - 1)))) == 0;
+      int16_t _x = x_coord + _l;
+      
+      uint16_t &v = p[ESP32_TX_FIFO_POSITION_ADJUST(_x)];
+      
+      v &= _colourbitclear;   // reset colour bits
+      if(!skip)
+      v |= RGB_output_bits;   // set new colour bits
+    } while (_l);             // iterate pixels in a row
+  } while (colour_depth_idx); // end of colour depth loop (8)
+}
+
 #endif // NO_FAST_FUNCTIONS

@@ -593,6 +593,50 @@ public:
     fillRectDMA(x, y, w, h, r, g, b);
     
   }
+
+  void drawFastBitmap(int16_t x_coord, int16_t y_coord, uint8_t num_rows, uint8_t num_cols, uint8_t* data, bool flip, uint16_t color)
+  {
+    uint8_t r, g, b;
+    color565to888(color, r, g, b);
+    
+    drawFastBitmap(x_coord, y_coord, num_rows, num_cols, data, flip, r, g, b);
+  }
+  
+  void drawFastBitmap(int16_t x_coord, int16_t y_coord, uint8_t num_rows, uint8_t num_cols, uint8_t* data, bool flip, uint8_t red, uint8_t green, uint8_t blue)
+  {
+    uint8_t index = 0;
+    for(uint8_t i = 0; i < num_rows; ++i)
+    {
+      for(uint8_t j = 0; j < num_cols; j += 8)
+      {
+        int16_t x_offset = flip ? num_cols - j - 8 : j;
+        x_offset = x_offset < 0 ? 0 : x_offset;
+        int16_t length = num_cols - j;
+        length = length > 8 ? 8 : length;
+        bitmapRow(x_coord + x_offset, y_coord + i, length, data[index++], flip, red, green, blue);
+      }
+    }
+  }
+  
+  void drawFastBitmapGradient(int16_t x_coord, int16_t y_coord, uint8_t num_rows, uint8_t num_cols, uint8_t* data, bool flip, uint8_t gradient_step, uint8_t gradient_offset)
+  {
+    uint8_t r=0, g=0, b=0;
+    calculateGradient(gradient_offset, 0, r, g, b);
+    uint8_t index = 0;
+    for(uint8_t i = 0; i < num_rows; ++i)
+    {
+      for(uint8_t j = 0; j < num_cols; j += 8)
+      {
+        int16_t x_offset = flip ? num_cols - j - 8 : j;
+        x_offset = x_offset < 0 ? 0 : x_offset;
+        int16_t length = num_cols - j;
+        length = length > 8 ? 8 : length;
+        bitmapRow(x_coord + x_offset, y_coord + i, length, data[index++], flip, r, g, b);
+      }
+      
+      calculateGradient(gradient_offset, gradient_step, r, g, b);
+    }
+  }
 #endif
 
   void fillScreenRGB888(uint8_t r, uint8_t g, uint8_t b);
@@ -781,6 +825,8 @@ protected:
    * @param uint8_t b - RGB888 colour
    */
   void fillRectDMA(int16_t x_coord, int16_t y_coord, int16_t w, int16_t h, uint8_t r, uint8_t g, uint8_t b);
+
+  void bitmapRow(int16_t x_coord, int16_t y_coord, int16_t length, uint8_t bitmask, bool flip, uint8_t red, uint8_t green, uint8_t blue);
 #endif
 
   // ------- PRIVATE -------
@@ -917,6 +963,44 @@ inline void MatrixPanel_I2S_DMA::color565to888(const uint16_t color, uint8_t &r,
   r |= r >> 5;
   g |= g >> 6;
   b |= b >> 5;
+}
+
+inline void hueToRGB(uint8_t hue, uint8_t& r, uint8_t& g, uint8_t& b)
+{
+  uint8_t region = hue / 43;
+  uint8_t remainder = (hue - (region * 43)) * 6;
+  
+  uint8_t p = 0;
+  uint8_t q = (255 * (255 - ((255 * remainder) >> 8))) >> 8;
+  uint8_t t = (255 * (255 - ((255 * (255 - remainder)) >> 8))) >> 8;
+  
+  switch(region)
+  {
+    case 0:
+    r = 255; g = t; b = p;
+    return;
+    case 1:
+    r = q; g = 255; b = p;
+    return;
+    case 2:
+    r = p; g = 255; b = t;
+    return;
+    case 3:
+    r = p; g = q; b = 255;
+    return;
+    case 4:
+    r = t; g = p; b = 255;
+    return;
+    case 5:
+    r = 255; g = p; b = q;
+    return;
+  }
+}
+
+inline void calculateGradient(uint8_t& start, uint8_t step, uint8_t& r, uint8_t& g, uint8_t& b)
+{
+  start += step;
+  hueToRGB(start, r, g, b);
 }
 
 inline void MatrixPanel_I2S_DMA::drawPixel(int16_t x, int16_t y, uint16_t color) // adafruit virtual void override
